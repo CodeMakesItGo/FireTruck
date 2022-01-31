@@ -1,11 +1,10 @@
-/*
-  CodeMakesItGo 2022
-  Using the Mother Clucker Eggxit Door PCB (Arduino Nano)
-*/
+/// CodeMakesItGo Jan 2022
+/// Using the Mother Clucker Eggxit Door PCB (Arduino Nano)
 
+/*-----( Includes )-----*/
 #include <RCSwitch.h> //sui77,fingolfin 
 
-// PIN definitions
+/*-----( Digital Pins )-----*/
 #define BTN2_IN 12      //Button 2 on dashboard
 #define BTN1_IN 11      //Button 3 on dashboard
 #define BTN3_IN 9       //Button 1 on dashboard
@@ -15,55 +14,33 @@
 #define SIDELED_OUT A5  //Output to turn on solid state relay for side lights
 #define SPEAKER_OUT 8   //Square wave output to HORN_IN
 #define HORN_IN 2       //HORN_IN input button on steering wheel
-#define FLASHYLIGHTS 10 //Flashing Red and blue lights
+#define FLASHYLIGHTS_OUT 10 //Flashing Red and blue lights
+
+/*-----( Configuration )-----*/
 #define PRESS_COUNT 5   //5*25 = 125ms debounce
 
-RCSwitch mySwitch = RCSwitch();
-unsigned long buttonDown[3] = {0}; //Button debounce counters
+/*-----( typedefs )-----*/
 typedef enum lightStates {OFF, SLOW, FAST}; //Light states for flashy lights
-lightStates currentLightState = OFF;   //Current state of flashy lights
-lightStates requestedLightState = OFF; //requested state of flashy lights
+
+/*-----( Global Variables )-----*/
+static unsigned long buttonDown[3] = {0}; //Button debounce counters
+static lightStates currentLightState = OFF;   //Current state of flashy lights
+static lightStates requestedLightState = OFF; //requested state of flashy lights
+static long timer25 = 0;     //25 millisecond timer
+static long timer250 = 0;    //250 millisecond timer
+static bool lightsOn = false; //Toggler for lights flashing
+
+/*-----( Global Constants )-----*/
 static const int lightDelay = 300;  //delay when transmitting message to flashy light module
+static const int length = 15; // the number of notes
+static const char notes[] = "ccggaagffeeddc "; // a space represents a rest
+static const int beats[] = { 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 2, 4 };
+static const int tempo = 150;
 
-long timer25 = 0;     //25 millisecond timer
-long timer250 = 0;    //250 millisecond timer
-bool lightsOn = false; //Toggler for lights flashing
+/*-----( Class Objects )-----*/
+RCSwitch mySwitch = RCSwitch();
 
-//Tones
-int length = 15; // the number of notes
-char notes[] = "ccggaagffeeddc "; // a space represents a rest
-int beats[] = { 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 2, 4 };
-int tempo = 150;
-
-void setup() 
-{
-  Serial.begin(9600);
-  //mySwitch.enableReceive(0);  // Receiver on interrupt 0 => that is pin #2
-  
-  // Transmitter is connected to Arduino Pin #10    
-  mySwitch.enableTransmit(FLASHYLIGHTS); 
-  
-  // Optional set pulse length. 
-  mySwitch.setPulseLength(365);
-  mySwitch.setProtocol(1); 
-  mySwitch.setRepeatTransmit(1); 
-
-  pinMode(BTN1_IN, INPUT_PULLUP);
-  pinMode(BTN2_IN, INPUT_PULLUP); 
-  pinMode(BTN3_IN, INPUT_PULLUP);
-  pinMode(HORN_IN, INPUT_PULLUP);
-
-  pinMode(RLY1_OUT, OUTPUT);
-  pinMode(RLY2_OUT, OUTPUT);
-  pinMode(LED_OUT, OUTPUT);
-  pinMode(SPEAKER_OUT, INPUT);
-  pinMode(SIDELED_OUT, OUTPUT);
-  
-  digitalWrite(RLY1_OUT, HIGH);
-  digitalWrite(RLY2_OUT, LOW);
-  digitalWrite(SIDELED_OUT, LOW);
-}
-
+/*-----( Functions )-----*/
 void playTone(int tone, int duration) 
 {
   for (long i = 0; i < duration * 1000L; i += tone * 2) 
@@ -87,56 +64,6 @@ void playNote(char note, int duration)
     {
       playTone(tones[i], duration);
     }
-  }
-}
-
-void loop() 
-{
-  if(millis() - timer25 > 25)
-  {
-    buttonPress();
-    updateLights();
-    timer25 = millis();
-  }
-
-  if(millis() - timer250 > 250)
-  {
-    timer250 = millis();
-    lightsOn = !lightsOn;
-    lightsOn ? digitalWrite(LED_OUT, HIGH) : digitalWrite(LED_OUT, LOW);
-    
-    if(currentLightState != OFF)
-    {
-      lightsOn ? digitalWrite(RLY1_OUT, HIGH) : digitalWrite(RLY1_OUT, LOW);
-      lightsOn ? digitalWrite(RLY2_OUT, HIGH) : digitalWrite(RLY2_OUT, LOW);
-      lightsOn ? digitalWrite(SIDELED_OUT, HIGH) : digitalWrite(SIDELED_OUT, LOW);
-    }
-    else
-    {
-      digitalWrite(RLY2_OUT, LOW);
-      digitalWrite(RLY1_OUT, HIGH);
-      digitalWrite(SIDELED_OUT, LOW);
-    }
-  }
-
-  if(digitalRead(HORN_IN) == LOW)
-  {
-    pinMode(SPEAKER_OUT, OUTPUT);
-    for (int i = 0; i < length; i++) 
-    {
-      if (notes[i] == ' ') 
-      {
-        delay(beats[i] * tempo); // rest
-      } 
-      else 
-      {
-        playNote(notes[i], beats[i] * tempo);
-      }
-  
-      // pause between notes
-      delay(tempo / 2); 
-    }
-    pinMode(SPEAKER_OUT, INPUT);
   }
 }
 
@@ -232,7 +159,7 @@ void buttonPress()
   }
 }
 
-// Function used to read the remote messages, disabled
+// Function used to read the remote messages, !disabled!
 void sniff()
 {
   if (mySwitch.available()) 
@@ -250,4 +177,83 @@ void sniff()
 
     mySwitch.resetAvailable();
   }
+}
+
+void loop() 
+{
+  if(millis() - timer25 > 25)
+  {
+    buttonPress();
+    updateLights();
+    timer25 = millis();
+  }
+
+  if(millis() - timer250 > 250)
+  {
+    timer250 = millis();
+    lightsOn = !lightsOn;
+    lightsOn ? digitalWrite(LED_OUT, HIGH) : digitalWrite(LED_OUT, LOW);
+    
+    if(currentLightState != OFF)
+    {
+      lightsOn ? digitalWrite(RLY1_OUT, HIGH) : digitalWrite(RLY1_OUT, LOW);
+      lightsOn ? digitalWrite(RLY2_OUT, HIGH) : digitalWrite(RLY2_OUT, LOW);
+      lightsOn ? digitalWrite(SIDELED_OUT, HIGH) : digitalWrite(SIDELED_OUT, LOW);
+    }
+    else
+    {
+      digitalWrite(RLY2_OUT, LOW);
+      digitalWrite(RLY1_OUT, HIGH);
+      digitalWrite(SIDELED_OUT, LOW);
+    }
+  }
+
+  if(digitalRead(HORN_IN) == LOW)
+  {
+    pinMode(SPEAKER_OUT, OUTPUT);
+    for (int i = 0; i < length; i++) 
+    {
+      if (notes[i] == ' ') 
+      {
+        delay(beats[i] * tempo); // rest
+      } 
+      else 
+      {
+        playNote(notes[i], beats[i] * tempo);
+      }
+  
+      // pause between notes
+      delay(tempo / 2); 
+    }
+    pinMode(SPEAKER_OUT, INPUT);
+  }
+}
+
+void setup() 
+{
+  Serial.begin(9600);
+  //mySwitch.enableReceive(0);  // Receiver on interrupt 0 => that is pin #2
+  
+  // Transmitter is connected to Arduino Pin #10    
+  mySwitch.enableTransmit(FLASHYLIGHTS_OUT); 
+  
+  // Optional set pulse length. 
+  mySwitch.setPulseLength(365);
+  mySwitch.setProtocol(1); 
+  mySwitch.setRepeatTransmit(1); 
+
+  pinMode(BTN1_IN, INPUT_PULLUP);
+  pinMode(BTN2_IN, INPUT_PULLUP); 
+  pinMode(BTN3_IN, INPUT_PULLUP);
+  pinMode(HORN_IN, INPUT_PULLUP);
+
+  pinMode(RLY1_OUT, OUTPUT);
+  pinMode(RLY2_OUT, OUTPUT);
+  pinMode(LED_OUT, OUTPUT);
+  pinMode(SPEAKER_OUT, INPUT);
+  pinMode(SIDELED_OUT, OUTPUT);
+  
+  digitalWrite(RLY1_OUT, HIGH);
+  digitalWrite(RLY2_OUT, LOW);
+  digitalWrite(SIDELED_OUT, LOW);
 }
